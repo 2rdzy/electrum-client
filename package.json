@@ -4,16 +4,16 @@
 	"description": "Electrum protocol client for React Native & Node.js",
 	"main": "index.js",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "node --test test/*.test.js"
 	},
 	"dependencies": {},
 	"devDependencies": {},
 	"repository": {
 		"type": "git",
-		"url": "git://github.com/janoside/electrum-client.git"
+		"url": "git+https://github.com/2rdzy/electrum-client.git"
 	},
 	"bugs": {
-		"url": "https://github.com/janoside/electrum-client/issues"
+		"url": "https://github.com/2rdzy/electrum-client/issues"
 	},
 	"keywords": [
 		"bitcoin",
@@ -21,13 +21,26 @@
 		"electrumx"
 	],
 	"engines": {
-		"node": ">=6"
+		"node": ">=18"
 	},
 	"contributors": [
-		{ "name": "Yuki Akiyama" },
-		{ "name": "7kharov" },
-		{ "name": "overtorment" },
-		{ "name": "janoside" }
+		{
+			"name": "Yuki Akiyama"
+		},
+		{
+			"name": "7kharov"
+		},
+		{
+			"name": "overtorment"
+		},
+		{
+			"name": "janoside"
+		}
 	],
-	"license": "MIT"
+	"license": "MIT",
+	"homepage": "https://github.com/2rdzy/electrum-client#readme",
+	"files": [
+		"index.js",
+		"lib"
+	]
 }
