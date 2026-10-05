@@ -119,7 +119,7 @@ class ElectrumClient extends Client {
 		this.timeout = setTimeout(() => {
 			if (this.timeLastCall !== 0 && new Date().getTime() > this.timeLastCall + pingPeriod) {
 				this.server_ping().catch((reason) => {
-					this.log('Keep-Alive ping failed: ', reason);
+					this.log(`Keep-Alive ping failed: ${reason}`);
 				});
 			}
 		}, pingPeriod);
@@ -205,7 +205,7 @@ class ElectrumClient extends Client {
 		return this.request('blockchain.block.get_header', [height]);
 	}
 	blockchainBlock_headers(start_height, count) {
-		return this.request('blockchain.block.headeres', [start_height, count]);
+		return this.request('blockchain.block.headers', [start_height, count]);
 	}
 	blockchainEstimatefee(number) {
 		return this.request('blockchain.estimatefee', [number]);
