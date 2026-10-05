@@ -66,6 +66,8 @@ async function startServer({ useTls = false, handler = req => req.params } = {})
 		sockets,
 		// send a raw line to every connected client (for notifications and malformed input)
 		broadcast: line => sockets.forEach(socket => socket.write(line + '\n')),
+		// send raw text with no line ending
+		write: text => sockets.forEach(socket => socket.write(text)),
 		close: () => new Promise(resolve => {
 			sockets.forEach(socket => socket.destroy());
 			server.close(resolve);
