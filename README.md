@@ -33,6 +33,29 @@ For nodejs it should be provided before usage:
   global.net = require('net');
 ```
 
+## options
+
+The fourth constructor argument, `options`, is an object (all keys optional):
+
+| key | default | meaning |
+|---|---|---|
+| `connectTimeout` | `5000` | milliseconds to wait for the connection (for TLS, the handshake) and for the server's answer to `server.version`; `0` waits for ever |
+| `requestTimeout` | `0` (off) | milliseconds to wait for a response before the request fails with `Request timed out`; `0` waits for ever |
+| `maxBuffer` | `67108864` (64 MiB) | most bytes accepted without a line ending; beyond it the client reports an error and drops the connection |
+| `tls` | verify certificates | see [TLS](#tls-tls-and-ssl-protocols) |
+
+```javascript
+const client = new ElectrumClient(50002, 'electrum.example.com', 'tls', {
+  connectTimeout: 10000,
+  requestTimeout: 60000,
+  tls: { fingerprint256: 'AB:CD:...' }
+}, { onError: err => console.error(err) });
+```
+
+Problems that cannot be tied to a request (a reply nobody asked for, a line that is not JSON, an oversized message) are reported to the `onError` callback instead of throwing.
+
+`close()` rejects requests that are still pending and stops reconnecting.
+
 ## TLS (`tls` and `ssl` protocols)
 
 `tls` should be provided as well (`global.tls = require('tls')` in node).
