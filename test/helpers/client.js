@@ -8,6 +8,11 @@ const ElectrumClient = require('../../index.js');
 
 // Connect a client to `server`, run `fn(client)`, and always close the client.
 async function withClient(server, protocol, fn, { options, callbacks } = {}) {
+	// the test server's certificate is self-signed: trust it unless a test says otherwise
+	if (protocol === 'tls' && !(options && options.tls)) {
+		options = { ...options, tls: { rejectUnauthorized: false } };
+	}
+
 	const client = new ElectrumClient(server.port, '127.0.0.1', protocol, options, callbacks);
 
 	await client.initElectrum({ client: 'electrum-client-test', version: '1.4' }, { retryPeriod: 10, maxRetry: 0, callback: () => {} });
