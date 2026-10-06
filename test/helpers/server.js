@@ -16,9 +16,18 @@ const tlsOptions = {
 	cert: fs.readFileSync(path.join(fixtures, 'cert.pem')),
 };
 
+// a handler may return NO_REPLY to leave a request unanswered
+const NO_REPLY = Symbol('no reply');
+
 function reply(request, handler) {
 	try {
-		return { jsonrpc: '2.0', id: request.id, result: handler(request) };
+		const result = handler(request);
+
+		if (result === NO_REPLY) {
+			return NO_REPLY;
+		}
+
+		return { jsonrpc: '2.0', id: request.id, result };
 
 	} catch (err) {
 		return { jsonrpc: '2.0', id: request.id, error: { code: err.code || -1, message: err.message || String(err) } };
@@ -48,10 +57,12 @@ async function startServer({ useTls = false, handler = req => req.params } = {})
 				received.push(message);
 
 				const out = Array.isArray(message)
-					? message.map(request => reply(request, handler))
+					? message.map(request => reply(request, handler)).filter(r => r !== NO_REPLY)
 					: reply(message, handler);
 
-				socket.write(JSON.stringify(out) + '\n');
+				if (out !== NO_REPLY && !(Array.isArray(out) && out.length === 0)) {
+					socket.write(JSON.stringify(out) + '\n');
+				}
 			}
 		});
 	};
@@ -75,4 +86,23 @@ async function startServer({ useTls = false, handler = req => req.params } = {})
 	};
 }
 
-module.exports = { startServer, tlsOptions };
+// a TCP server that accepts connections and never says anything (so a TLS handshake stalls)
+async function startSilentServer() {
+	const sockets = new Set();
+	const server = net.createServer(socket => {
+		sockets.add(socket);
+		socket.on('error', () => {});
+	});
+
+	await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+
+	return {
+		port: server.address().port,
+		close: () => new Promise(resolve => {
+			sockets.forEach(socket => socket.destroy());
+			server.close(resolve);
+		}),
+	};
+}
+
+module.exports = { startServer, startSilentServer, tlsOptions, NO_REPLY };

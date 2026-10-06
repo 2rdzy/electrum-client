@@ -13,6 +13,7 @@ class ElectrumClient extends Client {
 		};
 
 		this.timeLastCall = 0;
+		this.closed = false;
 	}
 
 	initElectrum(electrumConfig, persistencePolicy = { retryPeriod: 10000, maxRetry: 1000, pingPeriod: 120000, callback: null }) {
@@ -22,7 +23,7 @@ class ElectrumClient extends Client {
 
 		return new Promise((resolve, reject) => {
 			this.connect().then(() => {
-				this.server_version(this.electrumConfig.client, this.electrumConfig.version).then((versionInfo) => {
+				this.withHandshakeTimeout(this.server_version(this.electrumConfig.client, this.electrumConfig.version)).then((versionInfo) => {
 					this.versionInfo = versionInfo;
 
 					if (this.onConnectCallback != null) {
@@ -37,6 +38,31 @@ class ElectrumClient extends Client {
 			}).catch((err) => {
 				reject(err);
 			});
+		});
+	}
+
+	// A server that accepts the connection but never answers server.version would otherwise
+	// leave initElectrum waiting for ever: give up after connectTimeout and drop the connection.
+	withHandshakeTimeout(promise) {
+		if (!(this.connectTimeout > 0)) {
+			return promise;
+		}
+
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.conn.destroy();
+
+				reject(new Error('Timed out waiting for the server version'));
+			}, this.connectTimeout);
+
+			if (timer.unref) {
+				timer.unref();
+			}
+
+			promise.then(
+				result => { clearTimeout(timer); resolve(result); },
+				err => { clearTimeout(timer); reject(err); }
+			);
 		});
 	}
 
@@ -68,6 +94,10 @@ class ElectrumClient extends Client {
 	onClose() {
 		super.onClose();
 
+		if (this.closed) {
+			return;
+		}
+
 		const list = [
 			'server.peers.subscribe',
 			'blockchain.numblocks.subscribe',
@@ -86,7 +116,15 @@ class ElectrumClient extends Client {
 			this.onCloseCallback(this);
 		}
 
-		setTimeout(() => {
+		if (this.reconnectTimer != null) {
+			clearTimeout(this.reconnectTimer);
+		}
+
+		this.reconnectTimer = setTimeout(() => {
+			if (this.closed) {
+				return;
+			}
+
 			if (this.persistencePolicy != null && this.persistencePolicy.maxRetry > 0) {
 				this.reconnect().catch((err) => {
 					this.onError(err);
@@ -103,10 +141,19 @@ class ElectrumClient extends Client {
 				});
 			}
 		}, retryPeriod);
+
+		// a pending reconnect must not keep the process alive on its own
+		if (this.reconnectTimer.unref) {
+			this.reconnectTimer.unref();
+		}
 	}
 
 	// ElectrumX persistancy
 	keepAlive() {
+		if (this.closed) {
+			return;
+		}
+
 		if (this.timeout != null) {
 			clearTimeout(this.timeout);
 		}
@@ -123,19 +170,31 @@ class ElectrumClient extends Client {
 				});
 			}
 		}, pingPeriod);
+
+		if (this.timeout.unref) {
+			this.timeout.unref();
+		}
 	}
 
 	close() {
+		this.closed = true;
+
 		super.close();
 
 		if (this.timeout != null) {
 			clearTimeout(this.timeout);
 		}
 
-		this.reconnect = this.reconnect = this.onClose = this.keepAlive = () => {}; // dirty hack to make it stop reconnecting
+		if (this.reconnectTimer != null) {
+			clearTimeout(this.reconnectTimer);
+		}
 	}
 
 	reconnect() {
+		if (this.closed) {
+			return Promise.reject(new Error('Client is closed'));
+		}
+
 		this.log("Electrum attempting reconnect...");
 		
 		this.initSocket();
