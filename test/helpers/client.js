@@ -10,7 +10,7 @@ const ElectrumClient = require('../../index.js');
 async function withClient(server, protocol, fn, { options, callbacks } = {}) {
 	const client = new ElectrumClient(server.port, '127.0.0.1', protocol, options, callbacks);
 
-	await client.initElectrum({ client: 'electrum-client-test', version: '1.4' }, { retryPeriod: 100000, maxRetry: 0, callback: () => {} });
+	await client.initElectrum({ client: 'electrum-client-test', version: '1.4' }, { retryPeriod: 10, maxRetry: 0, callback: () => {} });
 
 	try {
 		return await fn(client);
