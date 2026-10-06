@@ -65,3 +65,66 @@ for (const [protocol, useTls] of [['tcp', false], ['tls', true]]) {
 		});
 	});
 }
+
+describe('protocol handling', () => {
+	let server;
+
+	const handler = request => {
+		switch (request.method) {
+			case 'server.version': return ['test-server 1.0', '1.4'];
+			case 'server.ping': return null;
+			case 'zero': return 0;
+			case 'empty': return '';
+			case 'no': return false;
+			case 'echo': return request.params;
+			default: throw { code: -32601, message: `unknown method ${request.method}` };
+		}
+	};
+
+	before(async () => { server = await startServer({ handler }); });
+	after(() => server.close());
+
+	test('resolves falsy results as they are', () => withClient(server, 'tcp', async client => {
+		assert.equal(await client.server_ping(), null);
+		assert.equal(await client.request('zero', []), 0);
+		assert.equal(await client.request('empty', []), '');
+		assert.equal(await client.request('no', []), false);
+	}));
+
+	test('sends blockchain.block.headers', () => withClient(server, 'tcp', async client => {
+		await client.blockchainBlock_headers(100, 2).catch(() => {});
+
+		assert.ok(server.received.some(m => m.method === 'blockchain.block.headers' && m.params[0] === 100));
+	}));
+
+	test('an empty batch resolves empty and leaves other requests alone', () => withClient(server, 'tcp', async client => {
+		const pending = client.request('echo', ['still here']);
+
+		assert.deepEqual(await client.requestBatch('echo', []), []);
+		assert.deepEqual(await pending, ['still here']);
+	}));
+
+	test('survives a response it did not ask for', () => {
+		const errors = [];
+
+		return withClient(server, 'tcp', async client => {
+			server.broadcast(JSON.stringify({ jsonrpc: '2.0', id: 99999, result: 'late' }));
+			server.broadcast(JSON.stringify({ jsonrpc: '2.0', error: { code: 1, message: 'batch too big' } }));
+
+			assert.deepEqual(await client.request('echo', ['ok']), ['ok']);
+			assert.equal(errors.length, 2);
+			assert.match(errors[1].message, /batch too big/);
+		}, { callbacks: { onError: e => errors.push(e) } });
+	});
+
+	test('survives a line that is not JSON', () => {
+		const errors = [];
+
+		return withClient(server, 'tcp', async client => {
+			server.broadcast('this is not json');
+
+			assert.deepEqual(await client.request('echo', ['ok']), ['ok']);
+			assert.match(errors[0].message, /invalid JSON/);
+		}, { callbacks: { onError: e => errors.push(e) } });
+	});
+});
